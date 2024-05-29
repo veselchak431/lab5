@@ -1,0 +1,159 @@
+﻿@model MessagingApp1.Models.UserMessagesViewModel
+
+@{
+    ViewData["Title"] = "Сообщения";
+}
+
+<h2>Сообщения для @Model.User.FullName</h2>
+
+<!-- Filter form -->
+<h3>Фильтрация сообщений</h3>
+<form asp-action="Messages" method="get">
+    <input type="hidden" name="userId" value="@Model.User.Id" />
+    <div class="form-group">
+        <label for="sender">От кого</label>
+        <input type="text" id="sender" name="sender" class="form-control" value="@Model.Sender" />
+    </div>
+    <div class="form-group">
+        <label for="fromDate">Дата от</label>
+        <input type="date" id="fromDate" name="fromDate" class="form-control" value="@Model.FromDate?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="form-group">
+        <label for="toDate">Дата до</label>
+        <input type="date" id="toDate" name="toDate" class="form-control" value="@Model.ToDate?.ToString("yyyy-MM-dd")" />
+    </div>
+    <div class="form-group">
+        <label for="status">Статус</label>
+        <select id="status" name="status" class="form-control">
+            <option value="" class="status-option" data-status="">Все</option>
+            <option value="new" class="status-option" data-status="new">Новые</option>
+            <option value="read" class="status-option" data-status="read">Прочитанные</option>
+        </select>
+    </div>
+    <button type="submit" class="btn btn-primary mb-3 mt-3">Применить</button>
+</form>
+
+<!-- Sort options -->
+<div class="mb-3">
+    <a asp-action="Messages" asp-route-userId="@Model.User.Id" asp-route-sortOrder="date_asc" class="btn btn-secondary mb-3 mt-3">Дата ↑</a>
+    <a asp-action="Messages" asp-route-userId="@Model.User.Id" asp-route-sortOrder="date_desc" class="btn btn-secondary mb-3 mt-3">Дата ↓</a>
+</div>
+
+<!-- Messages table -->
+<table class="table">
+    <thead>
+        <tr>
+            <th>От кого</th>
+            <th>Тема</th>
+            <th>Дата</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var message in Model.Messages)
+        {
+            var rowClass = message.Status == "new" ? "new-message" : "";
+            <tr class="@rowClass" data-message-id="@message.Id">
+                <td>@message.From</td>
+                <td><a href="#" class="message-link" data-message-id="@message.Id">@message.Subject</a></td>
+                <td>@message.SentDate.ToString("g")</td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+<!-- Form to send message -->
+<h3>Отправить сообщение</h3>
+<form id="sendMessageForm" asp-action="SendMessage" method="post">
+    <input type="hidden" name="userId" value="@Model.User.Id" />
+    <div class="form-group">
+        <label for="recipient">Кому</label>
+        <input type="text" id="recipient" name="recipient" class="form-control" />
+    </div>
+    <div class="form-group">
+        <label for="subject">Тема</label>
+        <input type="text" id="subject" name="subject" class="form-control" />
+    </div>
+    <div class="form-group">
+        <label for="text">Сообщение</label>
+        <textarea id="text" name="text" class="form-control"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary mb-3 mt-3">Отправить</button>
+    <div class="alert alert-danger mt-3" id="userNotFoundError" style="display: none;">Пользователь не найден</div>
+</form>
+
+<!-- Modal to show message text -->
+<div class="modal fade" id="messageModal" tabindex="-1" role="dialog" aria-labelledby="messageModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="messageModalLabel">Сообщение</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="messageText"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="closeModalButton">Закрыть</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Highlight new messages
+            $(".new-message").css("background-color", "#cce5ff");
+
+            // Message link click handler
+            $(".message-link").click(function (e) {
+                e.preventDefault();
+                var messageId = $(this).data("message-id");
+                $.ajax({
+                    url: '@Url.Action("GetMessageText", "Account")',
+                    type: 'GET',
+                    data: { id: messageId },
+                    success: function (data) {
+                        $("#messageText").text(data.text);
+                        $("#messageModal").modal('show');
+                        $(`tr[data-message-id='${data.id}']`).removeClass("new-message").css("background-color", "");
+                    }
+                });
+            });
+
+            // Set selected status option
+            var selectedStatus = '@Model.Status';
+            if (selectedStatus) {
+                $(`option[data-status='${selectedStatus}']`).attr("selected", "selected");
+            }
+
+            // Handle error for non-existent user
+            $(document).ready(function () {
+                // Функция, которая будет вызываться при отправке формы
+                $("#sendMessageForm").submit(function (e) {
+                    var recipient = $("#recipient").val();
+                    var userExists = false;
+                    $.ajax({
+                        url: '@Url.Action("UserExists", "Account")',
+                        type: 'GET',
+                        async: false,
+                        data: { recipient: recipient },
+                        success: function (exists) {
+                            userExists = exists;
+                        }
+                    });
+
+                    if (!userExists) {
+                        e.preventDefault();
+                        $("#userNotFoundError").show();
+                    }
+                });
+            });
+        });
+        $("#closeModalButton").click(function () {
+            $("#messageModal").modal('hide');
+        });
+    </script>
+}
